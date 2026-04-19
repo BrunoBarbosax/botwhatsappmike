@@ -2,12 +2,12 @@ const { Client, LocalAuth } = require("whatsapp-web.js");
 const axios = require("axios");
 const moment = require("moment-timezone");
 
-// ================= CONFIG =================
+// CONFIG
 const API_KEY = "123";
 const BASE_URL = `https://www.thesportsdb.com/api/v1/json/${API_KEY}`;
 const TIMEZONE = "America/Sao_Paulo";
 
-// ================= CLIENT =================
+// CLIENT
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
@@ -25,13 +25,13 @@ const client = new Client({
   }
 });
 
-// ================= LOG =================
+// LOG
 function log(tipo, msg) {
   const hora = moment().tz(TIMEZONE).format("DD/MM HH:mm:ss");
   console.log(`[${hora}] [${tipo}] ${msg}`);
 }
 
-// ================= ERROS =================
+// ERROS
 process.on("unhandledRejection", (err) => {
   console.error("[UNHANDLED_REJECTION]", err);
 });
@@ -40,11 +40,11 @@ process.on("uncaughtException", (err) => {
   console.error("[UNCAUGHT_EXCEPTION]", err);
 });
 
-// ================= EVENTOS =================
+// EVENTOS
 client.on("qr", (qr) => {
-  console.log("\n========== QR CODE ==========\n");
+  console.log("\n====== QR CODE ======\n");
   console.log(qr);
-  console.log("\n=============================\n");
+  console.log("\n=====================\n");
 });
 
 client.on("ready", () => {
@@ -52,7 +52,7 @@ client.on("ready", () => {
 });
 
 client.on("auth_failure", (msg) => {
-  log("ERRO", "Falha auth: " + msg);
+  log("ERRO", "Auth falhou: " + msg);
 });
 
 client.on("disconnected", (reason) => {
@@ -63,10 +63,9 @@ client.on("loading_screen", (p, m) => {
   log("LOAD", `${p}% - ${m}`);
 });
 
-// ================= HELPERS =================
+// HELPERS
 function formatarData(data, hora) {
   if (!data || !hora) return "Sem horário";
-
   return moment.utc(`${data} ${hora}`)
     .tz(TIMEZONE)
     .format("DD/MM HH:mm");
@@ -79,15 +78,16 @@ function pickTip(i) {
     "📊 Ambas marcam SIM",
     "📊 Dupla chance 1X",
     "📊 Over HT",
-    "📊 Under 3.5",
+    "📊 Under 3.5"
   ];
   return tips[i % tips.length];
 }
 
-// ================= API =================
+// API
 async function getJogos() {
   try {
     const hoje = moment().format("YYYY-MM-DD");
+
     const res = await axios.get(`${BASE_URL}/eventsday.php`, {
       params: { d: hoje, s: "Soccer" }
     });
@@ -99,7 +99,7 @@ async function getJogos() {
   }
 }
 
-// ================= BOT =================
+// BOT
 client.on("message", async (msg) => {
   if (!msg.from.includes("@g.us")) return;
 
@@ -107,7 +107,6 @@ client.on("message", async (msg) => {
 
   log("MSG", text);
 
-  // MENU
   if (text === "!menu") {
     return msg.reply(`📋 MENU
 
@@ -117,7 +116,6 @@ client.on("message", async (msg) => {
 !banca 💰`);
   }
 
-  // JOGOS
   if (text === "!jogos") {
     const jogos = await getJogos();
 
@@ -136,7 +134,6 @@ client.on("message", async (msg) => {
     return msg.reply(txt);
   }
 
-  // TIPS
   if (text === "!tips") {
     const jogos = await getJogos();
 
@@ -154,7 +151,6 @@ client.on("message", async (msg) => {
     return msg.reply(txt);
   }
 
-  // PLACAR
   if (text === "!placar") {
     const jogos = await getJogos();
 
@@ -167,7 +163,6 @@ client.on("message", async (msg) => {
     return msg.reply(txt);
   }
 
-  // BANCA
   if (text === "!banca") {
     return msg.reply(`💰 GESTÃO DE BANCA
 
@@ -177,6 +172,6 @@ client.on("message", async (msg) => {
   }
 });
 
-// ================= START =================
+// START
 log("BOT", "Iniciando...");
 client.initialize();
