@@ -1,69 +1,41 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const express = require("express");
 const axios = require("axios");
 const moment = require("moment-timezone");
+const pino = require("pino");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion
+} = require("@whiskeysockets/baileys");
 
-// CONFIG
+// ================= CONFIG =================
 const API_KEY = "123";
 const BASE_URL = `https://www.thesportsdb.com/api/v1/json/${API_KEY}`;
 const TIMEZONE = "America/Sao_Paulo";
+const PORT = process.env.PORT || 10000;
 
-// CLIENT
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process"
-    ]
-  }
+// ================= WEB SERVER =================
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Bot rodando.");
 });
 
-// LOG
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
+app.listen(PORT, () => {
+  console.log(`[WEB] Servidor ouvindo na porta ${PORT}`);
+});
+
+// ================= HELPERS =================
 function log(tipo, msg) {
   const hora = moment().tz(TIMEZONE).format("DD/MM HH:mm:ss");
   console.log(`[${hora}] [${tipo}] ${msg}`);
 }
 
-// ERROS
-process.on("unhandledRejection", (err) => {
-  console.error("[UNHANDLED_REJECTION]", err);
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("[UNCAUGHT_EXCEPTION]", err);
-});
-
-// EVENTOS
-client.on("qr", (qr) => {
-  console.log("\n====== QR CODE ======\n");
-  console.log(qr);
-  console.log("\n=====================\n");
-});
-
-client.on("ready", () => {
-  log("BOT", "✅ Bot conectado!");
-});
-
-client.on("auth_failure", (msg) => {
-  log("ERRO", "Auth falhou: " + msg);
-});
-
-client.on("disconnected", (reason) => {
-  log("ERRO", "Desconectado: " + reason);
-});
-
-client.on("loading_screen", (p, m) => {
-  log("LOAD", `${p}% - ${m}`);
-});
-
-// HELPERS
 function formatarData(data, hora) {
   if (!data || !hora) return "Sem horário";
   return moment.utc(`${data} ${hora}`)
@@ -83,15 +55,12 @@ function pickTip(i) {
   return tips[i % tips.length];
 }
 
-// API
 async function getJogos() {
   try {
     const hoje = moment().format("YYYY-MM-DD");
-
     const res = await axios.get(`${BASE_URL}/eventsday.php`, {
       params: { d: hoje, s: "Soccer" }
     });
-
     return res.data.events || [];
   } catch (err) {
     log("ERRO", "Erro API jogos");
@@ -99,79 +68,151 @@ async function getJogos() {
   }
 }
 
-// BOT
-client.on("message", async (msg) => {
-  if (!msg.from.includes("@g.us")) return;
+// ================= BOT =================
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+  const { version } = await fetchLatestBaileysVersion();
 
-  const text = msg.body.toLowerCase();
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    logger: pino({ level: "silent" }),
+    browser: ["Render Bot", "Chrome", "1.0.0"]
+  });
 
-  log("MSG", text);
+  sock.ev.on("creds.update", saveCreds);
 
-  if (text === "!menu") {
-    return msg.reply(`📋 MENU
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      console.log("\n====== QR CODE ======\n");
+      console.log(qr);
+      console.log("\n=====================\n");
+    }
+
+    if (connection === "open") {
+      log("BOT", "✅ Bot conectado!");
+    }
+
+    if (connection === "close") {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+      log("BOT", `Conexão fechada. Reconectar: ${shouldReconnect}`);
+
+      if (shouldReconnect) {
+        startBot();
+      } else {
+        log("BOT", "Sessão deslogada. Será necessário novo QR.");
+      }
+    }
+  });
+
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (type !== "notify") return;
+
+    const msg = messages[0];
+    if (!msg.message) return;
+    if (!msg.key.remoteJid || !msg.key.remoteJid.endsWith("@g.us")) return;
+    if (msg.key.fromMe) return;
+
+    const text =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      "";
+
+    const body = text.toLowerCase().trim();
+
+    log("MSG", body);
+
+    if (body === "!menu") {
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: `📋 MENU
 
 !jogos 📅
 !tips 🔥
 !placar 📊
-!banca 💰`);
-  }
-
-  if (text === "!jogos") {
-    const jogos = await getJogos();
-
-    if (!jogos.length) {
-      return msg.reply("⚠️ Nenhum jogo hoje");
+!banca 💰`
+      });
+      return;
     }
 
-    let txt = "📅 JOGOS HOJE\n\n";
+    if (body === "!jogos") {
+      const jogos = await getJogos();
 
-    jogos.slice(0, 10).forEach(j => {
-      txt += `⚽ ${j.strHomeTeam} x ${j.strAwayTeam}\n`;
-      txt += `🏆 ${j.strLeague}\n`;
-      txt += `🕒 ${formatarData(j.dateEvent, j.strTime)}\n\n`;
-    });
+      if (!jogos.length) {
+        await sock.sendMessage(msg.key.remoteJid, {
+          text: "⚠️ Nenhum jogo hoje"
+        });
+        return;
+      }
 
-    return msg.reply(txt);
-  }
+      let txt = "📅 JOGOS HOJE\n\n";
 
-  if (text === "!tips") {
-    const jogos = await getJogos();
+      jogos.slice(0, 10).forEach((j) => {
+        txt += `⚽ ${j.strHomeTeam} x ${j.strAwayTeam}\n`;
+        txt += `🏆 ${j.strLeague}\n`;
+        txt += `🕒 ${formatarData(j.dateEvent, j.strTime)}\n\n`;
+      });
 
-    if (!jogos.length) {
-      return msg.reply("⚠️ Sem jogos hoje");
+      await sock.sendMessage(msg.key.remoteJid, { text: txt });
+      return;
     }
 
-    let txt = "🔥 TIPS DO DIA\n\n";
+    if (body === "!tips") {
+      const jogos = await getJogos();
 
-    jogos.slice(0, 5).forEach((j, i) => {
-      txt += `⚽ ${j.strHomeTeam} x ${j.strAwayTeam}\n`;
-      txt += `🎯 ${pickTip(i)}\n\n`;
-    });
+      if (!jogos.length) {
+        await sock.sendMessage(msg.key.remoteJid, {
+          text: "⚠️ Sem jogos hoje"
+        });
+        return;
+      }
 
-    return msg.reply(txt);
-  }
+      let txt = "🔥 TIPS DO DIA\n\n";
 
-  if (text === "!placar") {
-    const jogos = await getJogos();
+      jogos.slice(0, 5).forEach((j, i) => {
+        txt += `⚽ ${j.strHomeTeam} x ${j.strAwayTeam}\n`;
+        txt += `🎯 ${pickTip(i)}\n\n`;
+      });
 
-    let txt = "🔴 PLACAR\n\n";
+      await sock.sendMessage(msg.key.remoteJid, { text: txt });
+      return;
+    }
 
-    jogos.slice(0, 10).forEach(j => {
-      txt += `⚽ ${j.strHomeTeam} ${j.intHomeScore || 0} x ${j.intAwayScore || 0} ${j.strAwayTeam}\n`;
-    });
+    if (body === "!placar") {
+      const jogos = await getJogos();
 
-    return msg.reply(txt);
-  }
+      if (!jogos.length) {
+        await sock.sendMessage(msg.key.remoteJid, {
+          text: "⚠️ Nenhum placar disponível"
+        });
+        return;
+      }
 
-  if (text === "!banca") {
-    return msg.reply(`💰 GESTÃO DE BANCA
+      let txt = "🔴 PLACAR\n\n";
+
+      jogos.slice(0, 10).forEach((j) => {
+        txt += `⚽ ${j.strHomeTeam} ${j.intHomeScore || 0} x ${j.intAwayScore || 0} ${j.strAwayTeam}\n`;
+      });
+
+      await sock.sendMessage(msg.key.remoteJid, { text: txt });
+      return;
+    }
+
+    if (body === "!banca") {
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: `💰 GESTÃO DE BANCA
 
 ✔️ 2% a 5%
 ✔️ sem emoção
-✔️ longo prazo`);
-  }
-});
+✔️ longo prazo`
+      });
+    }
+  });
+}
 
-// START
-log("BOT", "Iniciando...");
-client.initialize();
+startBot().catch((err) => {
+  console.error("[FATAL]", err);
+});
