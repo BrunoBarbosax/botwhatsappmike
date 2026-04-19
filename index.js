@@ -2,6 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const moment = require("moment-timezone");
 const pino = require("pino");
+const QRCode = require("qrcode");
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -15,6 +16,11 @@ const BASE_URL = `https://www.thesportsdb.com/api/v1/json/${API_KEY}`;
 const TIMEZONE = "America/Sao_Paulo";
 const PORT = process.env.PORT || 10000;
 
+// ================= ESTADO QR =================
+let currentQR = null;
+let currentQRDataURL = null;
+let isConnected = false;
+
 // ================= WEB SERVER =================
 const app = express();
 
@@ -24,6 +30,59 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
+});
+
+app.get("/qr", async (req, res) => {
+  try {
+    if (isConnected) {
+      return res.send(`
+        <html>
+          <head><meta charset="utf-8"><title>QR do Bot</title></head>
+          <body style="font-family:Arial;text-align:center;padding:40px;background:#111;color:#fff;">
+            <h1>✅ Bot conectado</h1>
+            <p>O WhatsApp já foi autenticado.</p>
+          </body>
+        </html>
+      `);
+    }
+
+    if (!currentQR) {
+      return res.send(`
+        <html>
+          <head><meta charset="utf-8"><title>QR do Bot</title></head>
+          <body style="font-family:Arial;text-align:center;padding:40px;background:#111;color:#fff;">
+            <h1>⏳ QR ainda não disponível</h1>
+            <p>Atualize esta página em alguns segundos.</p>
+          </body>
+        </html>
+      `);
+    }
+
+    if (!currentQRDataURL) {
+      currentQRDataURL = await QRCode.toDataURL(currentQR, {
+        width: 360,
+        margin: 2
+      });
+    }
+
+    return res.send(`
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>QR do Bot</title>
+        </head>
+        <body style="font-family:Arial;text-align:center;padding:40px;background:#111;color:#fff;">
+          <h1>📱 Escaneie o QR Code</h1>
+          <p>WhatsApp > Dispositivos conectados > Conectar dispositivo</p>
+          <img src="${currentQRDataURL}" style="background:#fff;padding:16px;border-radius:12px;" />
+          <p style="margin-top:20px;">Se expirar, atualize a página.</p>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("[QR_ROUTE_ERROR]", error);
+    res.status(500).send("Erro ao gerar QR.");
+  }
 });
 
 app.listen(PORT, () => {
@@ -86,16 +145,26 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log("\n====== QR CODE ======\n");
-      console.log(qr);
-      console.log("\n=====================\n");
+      currentQR = qr;
+      currentQRDataURL = null;
+      isConnected = false;
+
+      console.log("\n====== QR CODE GERADO ======\n");
+      console.log("Abra no navegador:");
+      console.log(`https://botwhatsappmike-1.onrender.com/qr`);
+      console.log("\n============================\n");
     }
 
     if (connection === "open") {
+      isConnected = true;
+      currentQR = null;
+      currentQRDataURL = null;
       log("BOT", "✅ Bot conectado!");
     }
 
     if (connection === "close") {
+      isConnected = false;
+
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
