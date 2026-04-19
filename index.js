@@ -21,7 +21,7 @@ const cooldown = new Set();
 const client = new Client({
     authStrategy: new LocalAuth({
         clientId: 'botwhatsappmike',
-        dataPath: process.env.RENDER ? '/var/data/.wwebjs_auth' : '.wwebjs_auth'
+        dataPath: '.wwebjs_auth'
     }),
     puppeteer: {
         args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -63,7 +63,7 @@ function filterFutureGames(jogos) {
 async function getJogos() {
     const agora = Date.now();
 
-    if (agora - ultimoCacheJogos < 60_000 && cacheJogos.length > 0) {
+    if (agora - ultimoCacheJogos < 60000 && cacheJogos.length > 0) {
         return cacheJogos;
     }
 
@@ -105,7 +105,7 @@ async function getJogos() {
 async function getLive() {
     const agora = Date.now();
 
-    if (agora - ultimoCacheLive < 30_000 && cacheLive.length > 0) {
+    if (agora - ultimoCacheLive < 30000 && cacheLive.length > 0) {
         return cacheLive;
     }
 
@@ -130,8 +130,7 @@ client.on('qr', qr => {
     botStatus = 'aguardando_qr';
     qrcode.generate(qr, { small: true });
     console.log('====== QR CODE GERADO ======');
-    console.log('Abra no navegador:');
-    console.log('/qr');
+    console.log('Abra no navegador: /qr');
     console.log('============================');
 });
 
