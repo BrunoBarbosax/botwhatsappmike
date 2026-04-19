@@ -20,7 +20,7 @@ const cooldown = new Set();
 
 const client = new Client({
     authStrategy: new LocalAuth({
-        clientId: 'botwhatsapp',
+        clientId: 'botwhatsappmike',
         dataPath: process.env.RENDER ? '/var/data/.wwebjs_auth' : '.wwebjs_auth'
     }),
     puppeteer: {
@@ -30,10 +30,6 @@ const client = new Client({
 
 function isGroupMessage(msg) {
     return typeof msg.from === 'string' && msg.from.endsWith('@g.us');
-}
-
-function isOnCooldown(user) {
-    return cooldown.has(user);
 }
 
 function startCooldown(user, ms = 4000) {
@@ -47,7 +43,7 @@ function formatDateBR(dateString) {
         timeZone: 'America/Sao_Paulo',
         day: '2-digit',
         month: '2-digit',
-        year: 'numeric',
+        year: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
     });
@@ -199,7 +195,7 @@ https://81gg6.com/?pid=4840583013
             );
         }
 
-        if (isOnCooldown(user)) return;
+        if (cooldown.has(user)) return;
 
         if (text === '!menu') {
             startCooldown(user);
@@ -299,7 +295,7 @@ app.get('/', (req, res) => {
     res.send(`
         <html>
             <body style="font-family:Arial;padding:24px">
-                <h2>Bot WhatsApp</h2>
+                <h2>Bot WhatsApp Mike</h2>
                 <p>Status: <b>${botStatus}</b></p>
                 <p>QR: <a href="/qr">abrir QR</a></p>
             </body>
