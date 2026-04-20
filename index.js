@@ -24,9 +24,10 @@ const client = new Client({
         dataPath: '.wwebjs_auth'
     }),
     puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
+    headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/opt/render/.cache/puppeteer/chrome/linux-147.0.7727.56/chrome-linux64/chrome',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+}
 });
 
 function isGroupMessage(msg) {
