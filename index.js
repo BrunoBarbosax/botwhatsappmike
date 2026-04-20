@@ -1,4 +1,5 @@
 const express = require('express');
+const puppeteer = require('puppeteer');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
@@ -24,10 +25,10 @@ const client = new Client({
         dataPath: '.wwebjs_auth'
     }),
     puppeteer: {
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/opt/render/.cache/puppeteer/chrome/linux-147.0.7727.56/chrome-linux64/chrome',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-}
+        headless: true,
+        executablePath: puppeteer.executablePath(),
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
 });
 
 function isGroupMessage(msg) {
