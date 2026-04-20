@@ -158,9 +158,10 @@ client.on('disconnected', reason => {
     console.log('[BOT] Conexão fechada. Motivo:', reason);
 });
 
-client.on('message', async msg => {
+// TESTE DE VIDA
+client.on('message_create', async msg => {
     try {
-        console.log(`[MSG] ${msg.body || ''}`);
+        console.log('[MSG RECEBIDA]', msg.body || '');
 
         if (!isGroupMessage(msg)) return;
 
@@ -289,7 +290,7 @@ Mais de 1.5 gols
             );
         }
     } catch (err) {
-        console.log('[ERRO MESSAGE]', err.message);
+        console.log('[ERRO MESSAGE_CREATE]', err.message);
     }
 });
 
